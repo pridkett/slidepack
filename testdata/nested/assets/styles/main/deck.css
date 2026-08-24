@@ -1,0 +1,8 @@
+@import url("../shared/reset.css");
+
+.tile {
+  width: 96px;
+  height: 96px;
+  background-image: url("../../images/icons/star.svg");
+  background-size: cover;
+}

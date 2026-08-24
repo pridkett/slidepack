@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slidepack Browser Fixture</title>
+<link rel="stylesheet" href="css/deck.css">
+<style>
+  /* Inline stylesheet: url() here resolves relative to this document. */
+  #inline-bg {
+    background-image: url("assets/texture.png");
+    background-repeat: repeat;
+  }
+</style>
+</head>
+<body>
+
+<main id="deck">
+
+  <section class="slide" id="slide-1">
+    <h1 class="headline">Slidepack</h1>
+    <p class="lede">Every resource on this slide came out of a compressed archive
+      embedded in a single HTML file.</p>
+    <p class="font-probe" id="font-probe">ABCDEFGHIJ</p>
+    <p class="font-fallback" id="font-fallback">ABCDEFGHIJ</p>
+  </section>
+
+  <section class="slide" id="slide-2">
+    <h2>Raster images</h2>
+    <!-- Document-relative path. -->
+    <img id="img-png" src="assets/chart.png" alt="Chart" width="320" height="180">
+    <!-- Root-relative path: resolved against the package root, not the host. -->
+    <img id="img-root" src="/assets/photo.jpg" alt="Photo" width="240" height="160">
+    <!-- Percent-encoded path containing a space and an en dash. -->
+    <img id="img-unicode" src="assets/Revenue%20Chart%20%E2%80%93%20Europe.webp"
+         alt="Revenue chart" width="320" height="180">
+    <!-- srcset candidates are rewritten individually. -->
+    <img id="img-srcset" srcset="assets/chart.png 1x, assets/photo.jpg 2x"
+         src="assets/chart.png" alt="Responsive chart" width="160" height="90">
+  </section>
+
+  <section class="slide" id="slide-3">
+    <h2>Vector and CSS assets</h2>
+    <!-- Standalone SVG file, with a fragment that must survive rewriting. -->
+    <img id="img-svg" src="assets/diagram.svg#detail" alt="Diagram" width="240" height="150">
+    <div id="css-bg" class="textured">Background from a nested stylesheet</div>
+    <div id="inline-bg">Background from an inline stylesheet</div>
+    <div id="attr-bg" style="background-image: url('assets/texture.png'); height: 48px;">
+      Background from a style attribute
+    </div>
+    <!-- A data: URL is authored content and must be left exactly as written. -->
+    <!-- The stylesheet gives this element a ::after whose content merely looks
+         like a url(); the CSS scanner must leave the string alone. -->
+    <p class="decoy" id="decoy"></p>
+    <img id="img-data" width="16" height="16" alt="Inline dot"
+         src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227%22%20fill%3D%22%23e8a33d%22%2F%3E%3C%2Fsvg%3E">
+  </section>
+
+  <section class="slide" id="slide-4">
+    <h2>Navigation</h2>
+    <p>Use the arrow keys, or follow a fragment link.</p>
+    <nav>
+      <a class="jump" href="#slide-1">First</a>
+      <a class="jump" href="#slide-3">Third</a>
+      <!-- An ordinary external hyperlink is not a rendering dependency. -->
+      <a id="external" href="https://example.com/documentation">Documentation</a>
+    </nav>
+    <p id="status">slide 1 of 4</p>
+  </section>
+
+</main>
+
+<script src="js/deck.js"></script>
+</body>
+</html>

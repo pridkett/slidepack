@@ -1,0 +1,76 @@
+/* Imported first: @import must resolve relative to this stylesheet. */
+@import url("theme/theme.css");
+
+@font-face {
+  font-family: "Slidepack Test";
+  /* Resolved relative to css/, so this reaches the package-root fonts/ dir. */
+  src: url("../fonts/slidepack-test.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* This exact value is asserted by the browser test. */
+  color: rgb(17, 34, 51);
+  background: var(--deck-bg, #f6f7fb);
+}
+
+.slide {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 6vmin;
+  scroll-margin-top: 0;
+}
+
+.headline {
+  /* Asserted by the browser test to prove the stylesheet was applied. */
+  font-size: 48px;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.4em;
+}
+
+.lede {
+  max-width: 34em;
+  font-size: 18px;
+}
+
+/* Both probes are inline-block so their measured width is the width of the
+   text, which is what tells a loaded custom font apart from the fallback. */
+.font-probe {
+  font-family: "Slidepack Test", monospace;
+  font-size: 32px;
+  margin: 0;
+  display: inline-block;
+}
+
+.font-fallback {
+  font-family: monospace;
+  font-size: 32px;
+  margin: 0;
+  display: inline-block;
+}
+
+/* A string that merely looks like a url() must not be rewritten. */
+.decoy::after {
+  content: "url(assets/not-a-real-file.png)";
+}
+
+/* Nor must one inside a comment: url(assets/also-not-real.png) */
+
+img {
+  display: block;
+  margin: 0 0 1rem;
+  max-width: 100%;
+  height: auto;
+}
+
+nav a {
+  margin-right: 1rem;
+}

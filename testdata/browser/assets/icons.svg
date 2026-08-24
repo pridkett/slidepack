@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="display:none">
+  <symbol id="warning" viewBox="0 0 24 24">
+    <path d="M12 2 L23 21 H1 Z" fill="#e8a33d"/>
+    <rect x="11" y="9" width="2" height="6" fill="#1b1b1b"/>
+    <rect x="11" y="17" width="2" height="2" fill="#1b1b1b"/>
+  </symbol>
+</svg>

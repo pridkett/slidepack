@@ -1,0 +1,17 @@
+# Build output
+/slidepack
+/dist/
+
+# Packed presentations produced while testing by hand
+/*.html
+
+# Browser test artifacts
+tests/browser/node_modules/
+tests/browser/.artifacts/
+tests/browser/test-results/
+tests/browser/playwright-report/
+tests/browser/blob-report/
+
+# Editor and OS noise
+.DS_Store
+*.swp

@@ -1,0 +1,104 @@
+/* slidepack format v1 bootstrap styles.
+   Scoped entirely to #slidepack-* IDs. The presentation renders inside an
+   iframe and therefore has a completely separate style scope, so nothing here
+   can reach it. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #101114;
+}
+
+#slidepack-frame {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+}
+
+#slidepack-status {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vmin;
+  box-sizing: border-box;
+  font: 400 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #e7e9ee;
+  background: #101114;
+  text-align: center;
+}
+
+#slidepack-status[hidden] {
+  display: none;
+}
+
+.slidepack-panel {
+  max-width: 44rem;
+  text-align: left;
+}
+
+.slidepack-loading {
+  text-align: center;
+  opacity: 0.8;
+}
+
+.slidepack-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.slidepack-label {
+  margin: 1.25rem 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9aa2b1;
+}
+
+.slidepack-reason {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #3a2226;
+  background: #1c1416;
+  color: #ffb4b4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.slidepack-footnote {
+  margin: 1.25rem 0 0;
+  font-size: 0.8125rem;
+  color: #79808f;
+}
+
+.slidepack-spinner {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.55em;
+  vertical-align: -0.2em;
+  border: 2px solid #454b58;
+  border-top-color: #cfd4de;
+  border-radius: 50%;
+  animation: slidepack-spin 0.9s linear infinite;
+}
+
+@keyframes slidepack-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slidepack-spinner { animation: none; }
+}
