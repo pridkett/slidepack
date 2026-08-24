@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/pathutil"
+	"github.com/pridkett/slidepack/internal/pathutil"
 )
 
 const (

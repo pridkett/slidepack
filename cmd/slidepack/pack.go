@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pwagstro/slidepack/internal/cli"
-	"github.com/pwagstro/slidepack/internal/inspect"
-	"github.com/pwagstro/slidepack/internal/pack"
-	"github.com/pwagstro/slidepack/internal/source"
+	"github.com/pridkett/slidepack/internal/cli"
+	"github.com/pridkett/slidepack/internal/inspect"
+	"github.com/pridkett/slidepack/internal/pack"
+	"github.com/pridkett/slidepack/internal/source"
 )
 
 func packCommand() *cli.Command {

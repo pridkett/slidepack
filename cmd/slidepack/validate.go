@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/cli"
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/source"
-	"github.com/pwagstro/slidepack/internal/validate"
+	"github.com/pridkett/slidepack/internal/cli"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/source"
+	"github.com/pridkett/slidepack/internal/validate"
 )
 
 func validateCommand() *cli.Command {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pwagstro/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/diag"
 )
 
 func cssValues(src string) []string {

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/unpack"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/unpack"
 )
 
 // Report is the machine-readable inspection result.

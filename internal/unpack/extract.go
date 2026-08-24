@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/pathutil"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/pathutil"
 )
 
 // ExtractOptions configures extraction.

@@ -14,8 +14,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/cli"
-	"github.com/pwagstro/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/cli"
+	"github.com/pridkett/slidepack/internal/manifest"
 )
 
 // Exit codes. These are part of the CLI contract and are published by

@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/mimes"
-	"github.com/pwagstro/slidepack/internal/pathutil"
-	"github.com/pwagstro/slidepack/internal/source"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/mimes"
+	"github.com/pridkett/slidepack/internal/pathutil"
+	"github.com/pridkett/slidepack/internal/source"
 )
 
 // Options tunes a source validation run.

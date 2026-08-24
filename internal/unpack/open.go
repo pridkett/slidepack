@@ -17,12 +17,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/pwagstro/slidepack/internal/archive"
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/envelope"
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/pathutil"
-	"github.com/pwagstro/slidepack/internal/source"
+	"github.com/pridkett/slidepack/internal/archive"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/envelope"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/pathutil"
+	"github.com/pridkett/slidepack/internal/source"
 )
 
 // MaxArchiveBytes caps how much slidepack will expand a payload into memory.

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pwagstro/slidepack/internal/archive"
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/envelope"
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/mimes"
+	"github.com/pridkett/slidepack/internal/archive"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/envelope"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/mimes"
 )
 
 /* ------------------------------------------------------------------ */

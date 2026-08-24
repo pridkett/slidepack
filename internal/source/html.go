@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/pwagstro/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/diag"
 )
 
 // RefContext distinguishes references the browser must resolve in order to

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/pwagstro/slidepack/internal/cli"
+	"github.com/pridkett/slidepack/internal/cli"
 )
 
 func helpCommand() *cli.Command {

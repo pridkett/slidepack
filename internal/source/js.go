@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/diag"
 )
 
 // maskJS returns a copy of src, the same length, in which the bodies of

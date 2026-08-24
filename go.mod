@@ -1,4 +1,4 @@
-module github.com/pwagstro/slidepack
+module github.com/pridkett/slidepack
 
 go 1.24
 

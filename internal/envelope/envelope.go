@@ -18,8 +18,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/runtime"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/runtime"
 )
 
 // Marker is the sentinel comment that identifies a packed presentation.

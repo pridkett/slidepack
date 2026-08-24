@@ -3,9 +3,9 @@ package validate
 import (
 	"errors"
 
-	"github.com/pwagstro/slidepack/internal/diag"
-	"github.com/pwagstro/slidepack/internal/envelope"
-	"github.com/pwagstro/slidepack/internal/unpack"
+	"github.com/pridkett/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/envelope"
+	"github.com/pridkett/slidepack/internal/unpack"
 )
 
 // Packed validates a packed presentation end to end: envelope, manifest,

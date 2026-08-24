@@ -176,7 +176,7 @@ jobs:
           Or build from source:
 
           \`\`\`bash
-          go install github.com/pwagstro/slidepack/cmd/slidepack@${GITHUB_REF_NAME}
+          go install github.com/pridkett/slidepack/cmd/slidepack@${GITHUB_REF_NAME}
           \`\`\`
 
           ### Verifying what you downloaded

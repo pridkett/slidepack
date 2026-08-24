@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/pathutil"
+	"github.com/pridkett/slidepack/internal/pathutil"
 )
 
 // DefaultEntrypoint is the entry document assumed when --entry is not given.

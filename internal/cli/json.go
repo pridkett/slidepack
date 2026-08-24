@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/pwagstro/slidepack/internal/diag"
+	"github.com/pridkett/slidepack/internal/diag"
 )
 
 // InterfaceDoc is the machine-readable description of the whole program.

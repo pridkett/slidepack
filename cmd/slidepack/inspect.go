@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pwagstro/slidepack/internal/cli"
-	"github.com/pwagstro/slidepack/internal/inspect"
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/unpack"
+	"github.com/pridkett/slidepack/internal/cli"
+	"github.com/pridkett/slidepack/internal/inspect"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/unpack"
 )
 
 func inspectCommand() *cli.Command {

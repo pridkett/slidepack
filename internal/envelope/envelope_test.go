@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pwagstro/slidepack/internal/manifest"
-	"github.com/pwagstro/slidepack/internal/runtime"
+	"github.com/pridkett/slidepack/internal/manifest"
+	"github.com/pridkett/slidepack/internal/runtime"
 )
 
 func sampleManifest() *manifest.Manifest {

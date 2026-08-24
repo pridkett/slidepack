@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pwagstro/slidepack/internal/inspect"
-	"github.com/pwagstro/slidepack/internal/pack"
-	"github.com/pwagstro/slidepack/internal/unpack"
-	"github.com/pwagstro/slidepack/internal/validate"
+	"github.com/pridkett/slidepack/internal/inspect"
+	"github.com/pridkett/slidepack/internal/pack"
+	"github.com/pridkett/slidepack/internal/unpack"
+	"github.com/pridkett/slidepack/internal/validate"
 )
 
 /* ------------------------------------------------------------------ */
