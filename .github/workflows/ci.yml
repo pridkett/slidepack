@@ -4,13 +4,25 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
-# The browser suites are the only check that a packed file actually renders,
-# so CI runs the same gate a developer runs locally: ./scripts/verify.sh.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.24'
+
 jobs:
+  # The full local gate, unchanged: gofmt, go vet, every Go test, a CLI smoke
+  # test against the built binary, and Playwright in both target engines.
+  #
+  # The browser suites are the only check that a packed file actually renders,
+  # so they run on every push rather than being reserved for releases.
   verify:
     name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +33,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - uses: actions/setup-node@v4
@@ -33,6 +45,17 @@ jobs:
       - name: Install browser test dependencies
         working-directory: tests/browser
         run: npm ci --no-audit --no-fund
+
+      # Cache the browser binaries: they are ~200 MB and change only when the
+      # Playwright version in package-lock.json does.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/browser/package-lock.json') }}
 
       - name: Install Playwright browsers
         working-directory: tests/browser
@@ -46,30 +69,91 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ matrix.os }}
-          path: tests/browser/playwright-report/
+          path: |
+            tests/browser/playwright-report/
+            tests/browser/test-results/
           retention-days: 7
 
-  reproducible:
-    name: reproducible output across machines
-    runs-on: ubuntu-latest
+  # Windows has no Playwright job here because the packed-file guarantees are
+  # about the browser, not the host. What Windows must get right is path
+  # handling, so it runs the Go suite, which is where those rules live.
+  windows:
+    name: go test (windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go vet ./...
+      - run: go test ./...
+
+  lint:
+    name: staticcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+
+  # Packing the same tree twice, from two different absolute paths and with
+  # the timestamps disturbed in between, must produce identical bytes.
+  # Neither the working directory nor the filesystem clock may leak into the
+  # output.
+  reproducible:
+    name: reproducible output
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      # Packing the same tree twice, from two different working directories
-      # and with the timestamps disturbed in between, must produce identical
-      # bytes. Absolute paths and mtimes must not leak into the output.
-      - name: Pack twice and compare
+      - name: Pack twice from different paths and compare
         run: |
           set -euo pipefail
           go build -ldflags "-X main.version=ci" -o /tmp/slidepack ./cmd/slidepack
           cp -R testdata/browser /tmp/copy-a
-          cp -R testdata/browser /tmp/copy-b
-          find /tmp/copy-b -exec touch -t 199901010000 {} +
+          cp -R testdata/browser /tmp/a-considerably-longer-directory-name-b
+          find /tmp/a-considerably-longer-directory-name-b -exec touch -t 199901010000 {} +
           /tmp/slidepack pack /tmp/copy-a -o /tmp/a.html --quiet
-          /tmp/slidepack pack /tmp/copy-b -o /tmp/b.html --quiet
-          cmp /tmp/a.html /tmp/b.html
-          echo "packed output is reproducible"
+          /tmp/slidepack pack /tmp/a-considerably-longer-directory-name-b -o /tmp/b.html --quiet
+          if ! cmp /tmp/a.html /tmp/b.html; then
+            echo "::error::packed output is not reproducible across paths and mtimes"
+            exit 1
+          fi
+          echo "packed output is reproducible ($(wc -c < /tmp/a.html) bytes)"
+
+      - name: Round trip is byte-exact
+        run: |
+          set -euo pipefail
+          /tmp/slidepack unpack /tmp/a.html -o /tmp/restored --quiet
+          diff -r /tmp/copy-a /tmp/restored
+          echo "round trip is byte-exact"
+
+  # The published interface description must stay valid: agents parse it.
+  interface:
+    name: machine-readable interface
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Machine-readable interface is intact
+        run: |
+          go build -o /tmp/slidepack ./cmd/slidepack
+          ./scripts/check-interface.py /tmp/slidepack

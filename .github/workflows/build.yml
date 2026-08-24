@@ -1,0 +1,143 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  # slidepack ships as a single static executable with no runtime
+  # dependencies, so "does it build everywhere" is a cheap check worth running
+  # on every push rather than discovering at release time.
+  cross-compile:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: linux,   goarch: arm,   goarm: '7' }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: freebsd, goarch: amd64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          name="slidepack"
+          [ "$GOOS" = "windows" ] && name="slidepack.exe"
+          # -s -w strip the symbol table and DWARF data; the binary is a CLI,
+          # not something anyone attaches a debugger to, and it halves the size.
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" \
+            -o "dist/$name" ./cmd/slidepack
+          ls -lh "dist/$name"
+
+      - name: Vet for the target platform
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go vet ./...
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: slidepack-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  # A binary that builds but cannot pack is not a build. Each native runner
+  # exercises the artifact end to end.
+  smoke:
+    name: smoke test (${{ matrix.os }})
+    needs: cross-compile
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  artifact: slidepack-linux-amd64,   bin: slidepack }
+          - { os: macos-latest,   artifact: slidepack-darwin-arm64,  bin: slidepack }
+          - { os: windows-latest, artifact: slidepack-windows-amd64, bin: slidepack.exe }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+      - name: Make executable
+        if: runner.os != 'Windows'
+        run: chmod +x dist/${{ matrix.bin }}
+
+      - name: Pack, inspect, validate, unpack
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="./dist/${{ matrix.bin }}"
+          "$BIN" version
+          "$BIN" pack testdata/browser -o packed.html
+          "$BIN" inspect packed.html
+          "$BIN" validate packed.html
+          "$BIN" unpack packed.html -o restored
+          # The round trip must be byte-exact on every host, including the one
+          # with a different path separator and a different default umask.
+          diff -r testdata/browser restored
+          echo "round trip is byte-exact on ${{ matrix.os }}"
+
+      - name: Machine-readable interface is intact
+        shell: bash
+        run: python3 ./scripts/check-interface.py "./dist/${{ matrix.bin }}"
+
+  # The distributed executable must need nothing but itself.
+  no-runtime-dependency:
+    name: no dynamic dependencies
+    needs: cross-compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: slidepack-linux-amd64
+          path: dist
+      - name: The binary is statically linked
+        run: |
+          set -euo pipefail
+          chmod +x dist/slidepack
+          file dist/slidepack
+          if ldd dist/slidepack 2>&1 | grep -qv 'not a dynamic executable'; then
+            echo "::error::the binary has dynamic dependencies:"
+            ldd dist/slidepack
+            exit 1
+          fi
+          echo "statically linked, no runtime dependencies"
