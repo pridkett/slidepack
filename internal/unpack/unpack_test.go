@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -459,11 +460,26 @@ func TestExtractRestoresModes(t *testing.T) {
 		{"index.html", 0o644, "<p>x</p>"},
 		{"bin/run.sh", 0o755, "#!/bin/sh\n"},
 		{"private.txt", 0o600, "secret"},
+		{"frozen.txt", 0o444, "read only"},
 	}
 	pkg, err := Open(buildDoc(t, files, nil), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// The archive carries the modes on every platform; only restoring them is
+	// platform-dependent. Check that first, so a real regression in the format
+	// is not masked by the filesystem check below being skipped.
+	recorded := map[string]os.FileMode{}
+	for _, f := range pkg.Files {
+		recorded[f.Path] = f.Mode
+	}
+	for _, f := range files {
+		if recorded[f.path] != f.mode {
+			t.Errorf("archive records %s as %o, want %o", f.path, recorded[f.path], f.mode)
+		}
+	}
+
 	dest := filepath.Join(t.TempDir(), "out")
 	if _, err := Extract(pkg, dest, ExtractOptions{}); err != nil {
 		t.Fatal(err)
@@ -473,9 +489,69 @@ func TestExtractRestoresModes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if info.Mode().Perm() != f.mode {
-			t.Errorf("%s mode = %o, want %o", f.path, info.Mode().Perm(), f.mode)
+		got := info.Mode().Perm()
+
+		if runtime.GOOS == "windows" {
+			// Windows has no POSIX permission bits. os.Chmod there reads only
+			// the 0200 bit and toggles FILE_ATTRIBUTE_READONLY, and Stat
+			// reports 0666 for a writable file and 0444 for a read-only one.
+			// Read-only versus writable is the one distinction that survives,
+			// so that is what this asserts rather than skipping outright.
+			wantWritable := f.mode&0o200 != 0
+			if gotWritable := got&0o200 != 0; gotWritable != wantWritable {
+				t.Errorf("%s writable = %v, want %v (mode %o)", f.path, gotWritable, wantWritable, got)
+			}
+			continue
 		}
+
+		if got != f.mode {
+			t.Errorf("%s mode = %o, want %o", f.path, got, f.mode)
+		}
+	}
+}
+
+func TestExtractCanReplaceAReadOnlyFile(t *testing.T) {
+	// A package may record a read-only mode. Extracting it twice must work:
+	// after the first pass the file cannot be opened for writing, on Unix or
+	// on Windows, so --force would otherwise fail with a permission error on
+	// the second.
+	files := []rawFile{
+		{"index.html", 0o644, "<p>x</p>"},
+		{"frozen.txt", 0o444, "read only"},
+	}
+	pkg, err := Open(buildDoc(t, files, nil), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dest := t.TempDir()
+	if _, err := Extract(pkg, dest, ExtractOptions{}); err != nil {
+		t.Fatalf("first extraction: %v", err)
+	}
+	if _, err := Extract(pkg, dest, ExtractOptions{Force: true}); err != nil {
+		t.Fatalf("re-extracting over a read-only file: %v", err)
+	}
+
+	frozen := filepath.Join(dest, "frozen.txt")
+	body, err := os.ReadFile(frozen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "read only" {
+		t.Errorf("content = %q after re-extraction", body)
+	}
+
+	// The recorded mode is reapplied, not left writable by the workaround.
+	info, err := os.Stat(frozen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		if info.Mode().Perm()&0o200 != 0 {
+			t.Errorf("frozen.txt should still be read-only, got mode %o", info.Mode().Perm())
+		}
+	} else if info.Mode().Perm() != 0o444 {
+		t.Errorf("frozen.txt mode = %o, want 444", info.Mode().Perm())
 	}
 }
 

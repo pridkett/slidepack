@@ -188,6 +188,16 @@ func writeFile(target string, data []byte, mode os.FileMode) error {
 		if info.IsDir() {
 			return fmt.Errorf("%s already exists as a directory", target)
 		}
+		// A file with no owner-write bit cannot be opened for writing, even by
+		// its owner, so re-extracting over a package that records a read-only
+		// mode would fail. Restore write access first; the recorded mode is
+		// applied again below. On Windows this clears FILE_ATTRIBUTE_READONLY,
+		// which is the same obstacle in a different guise.
+		if info.Mode().Perm()&0o200 == 0 {
+			if err := os.Chmod(target, info.Mode().Perm()|0o200); err != nil {
+				return fmt.Errorf("making %s writable in order to replace it: %w", target, err)
+			}
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}

@@ -44,7 +44,7 @@ Reproduce everything below with:
 | AC-012 | Spaces and Unicode in paths | PASS | `AC-012 paths with spaces and non-ASCII characters resolve` (`assets/Revenue Chart – Europe.webp`); `pathutil.TestCheckAcceptsOrdinaryPaths`; `archive.TestNonASCIIStaysUSTAR` |
 | AC-013 | Exact content round trip | PASS | `integration.TestRoundTripPreservesEveryFileExactly`; `TestRoundTripOfTheCommittedFixtures`; `verify.sh` runs `diff -r` |
 | AC-014 | Path round trip | PASS | same tests — every relative path compared, including Unicode, spaces, no-extension and 7-level nesting |
-| AC-015 | Unix mode round trip | PASS | `integration.TestRoundTripPreservesEveryFileExactly` (0644/0755/0600); `unpack.TestExtractRestoresModes`; `archive.TestModesRoundTrip` |
+| AC-015 | Unix mode round trip | PASS | `integration.TestRoundTripPreservesEveryFileExactly` (0644/0755/0600); `unpack.TestExtractRestoresModes` (full modes on Unix, the read-only bit on Windows, which is all that platform can express); `unpack.TestExtractCanReplaceAReadOnlyFile`; `archive.TestModesRoundTrip` |
 | AC-016 | Deterministic output | PASS | `integration.TestPackingIsReproducible`; `archive.TestDeterministicOutput`; `archive.TestDeterministicGzip`; `envelope.TestWriteIsDeterministic` |
 | AC-017 | Mtime independence | PASS | `integration.TestMtimesDoNotAffectOutput`; `verify.sh` smoke test (`touch` then `cmp`); CI `reproducible` job packs from two different absolute paths with different mtimes |
 | AC-018 | Content sensitivity | PASS | `integration.TestOneChangedByteChangesTheOutput` — output bytes, the file digest and the payload digest all change |
