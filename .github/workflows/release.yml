@@ -166,7 +166,11 @@ jobs:
 
           ### Install
 
-          Download the archive for your platform, verify it against
+          \`\`\`bash
+          brew install pridkett/tap/slidepack
+          \`\`\`
+
+          Or download the archive for your platform, verify it against
           \`SHA256SUMS\`, and put \`slidepack\` on your \`PATH\`.
 
           \`\`\`bash
@@ -197,3 +201,68 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           fail_on_unmatched_files: true
+
+  # The tap is downstream of a published release: the formula must never point
+  # at assets that do not exist yet. Prereleases are skipped deliberately —
+  # `brew install` should give people the last release that passed the gate,
+  # not a release candidate.
+  tap:
+    name: update homebrew tap
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-rc') && !contains(github.event.inputs.tag || github.ref_name, '-beta') && !contains(github.event.inputs.tag || github.ref_name, '-alpha') }}
+    steps:
+      - name: Checkout slidepack
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          path: slidepack
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: staging
+          merge-multiple: true
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: pridkett/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Render and commit formula
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && VERSION="${{ github.event.inputs.tag }}"
+          VERSION="${VERSION#v}"
+
+          mkdir -p homebrew-tap/Formula
+          ./slidepack/scripts/render-formula.sh \
+            "$VERSION" staging homebrew-tap/Formula/slidepack.rb
+          cat homebrew-tap/Formula/slidepack.rb
+
+          cd homebrew-tap
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Formula/slidepack.rb
+
+          # Staged, not working-tree: on the very first release the formula is
+          # a new file, and `git diff` says nothing about those.
+          if git diff --cached --quiet -- Formula/slidepack.rb; then
+            echo "formula already up to date for ${VERSION}"
+            exit 0
+          fi
+
+          git commit -F - <<COMMIT
+          chore(slidepack): update formula to ${VERSION}
+
+          Rendered by the slidepack release workflow from the archives published
+          for tag v${VERSION}. Checksums are taken from the build artifacts
+          themselves rather than the release page.
+
+          Co-Authored-By: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          COMMIT
+          git push
