@@ -4,7 +4,6 @@
 class Slidepack < Formula
   desc "Pack a presentation directory into a single self-contained HTML file"
   homepage "https://pridkett.github.io/slidepack"
-  version "@@VERSION@@"
   license "MIT"
 
   on_macos do
@@ -38,7 +37,9 @@ class Slidepack < Formula
   end
 
   test do
-    assert_match "\"name\":\"slidepack\"", shell_output("#{bin}/slidepack version --json")
+    info = JSON.parse(shell_output("#{bin}/slidepack version --json"))
+    assert_equal "slidepack", info["name"]
+    assert_equal version.to_s, info["version"]
 
     # A presentation is any directory with an entry document, so the smallest
     # honest end-to-end check is pack -> unpack -> compare bytes.
