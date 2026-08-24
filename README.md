@@ -326,10 +326,17 @@ zero, `uname`/`gname` are empty, members and manifest entries are ordered
 byte-wise by path, the gzip header carries no timestamp, and MIME types come
 from a built-in table rather than the operating system's database.
 
-Two caveats: permission bits are an input, and Git records only the executable
-bit — so prefer `0644`/`0755` if you want identical output after a fresh
-clone. And the generator string is in the manifest, so output changes across
-slidepack versions by design.
+Output matches across operating systems too, which CI checks by packing the
+same fixture on Linux, macOS and Windows and comparing the bytes. Windows has
+no POSIX permission bits — Go reports `0666` for every writable file there — so
+modes are canonicalised to `0644`/`0444` when the filesystem cannot express
+them.
+
+Two caveats. Permission bits are an input, and Git records only the executable
+bit, so prefer `0644`/`0755` if you want identical output after a fresh clone;
+an executable bit cannot survive a round trip through Windows at all. And the
+generator string is in the manifest, so output changes across slidepack
+versions by design.
 
 ---
 

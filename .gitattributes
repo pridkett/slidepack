@@ -1,0 +1,25 @@
+# slidepack's whole premise is byte-exactness: packing is reproducible to the
+# byte, tests assert exact file contents, and testdata/ holds binary fixtures
+# whose digests are checked. A checkout that rewrites line endings would break
+# all three, and Git for Windows enables core.autocrlf by default.
+#
+# So: no end-of-line conversion for anything, ever, regardless of a
+# contributor's local Git configuration.
+* -text
+
+# Mark the binary fixtures as binary as well, so `git diff` shows "Binary files
+# differ" instead of pages of mojibake.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.avif   binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.mp4    binary
+*.webm   binary
+*.mp3    binary
+*.pdf    binary

@@ -185,7 +185,7 @@ HTML-escaped. It is informational only; readers MUST NOT rely on it.
 | `files[].size` | number | File length in bytes. |
 | `files[].sha256` | string | Hex SHA-256 of the file contents. |
 | `files[].mime` | string | MIME type the runtime assigns to the resource's Blob. |
-| `files[].mode` | string | Permission bits as four octal digits, e.g. `"0644"`. |
+| `files[].mode` | string | Permission bits as four octal digits, e.g. `"0644"`. On a host without POSIX permissions this is canonicalised to `0644` or `0444`; see §8. |
 
 `files` MUST be sorted by `path`, ascending, **byte-wise** — not by any
 locale-aware collation, which would make ordering depend on the machine.
@@ -446,11 +446,17 @@ This is achieved by:
 
 Filesystem modification times have no effect on output.
 
-Two caveats worth knowing:
+Three caveats worth knowing:
 
 - **Permission bits are an input.** Git records only the executable bit, so a
   tree cloned on two machines may pack differently if it contains modes other
   than `0644`/`0755`. Prefer those two.
+- **Modes are canonicalised on filesystems that cannot express them.** Windows
+  reports `0666` for every writable file and `0444` for a read-only one, which
+  is not a permission anybody chose. A packer running there MUST record `0644`
+  for writable and `0444` for read-only, so that the same tree produces the
+  same bytes on every platform. The executable bit cannot survive a round trip
+  through Windows, because the filesystem never stored it.
 - **The generator string is in the manifest.** Output changes across slidepack
   versions by design.
 

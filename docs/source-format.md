@@ -371,9 +371,20 @@ resource forks, and empty directories. These are deliberately not part of the
 canonical source representation — a presentation is its files, not the
 filesystem state around them.
 
-One practical note: permission bits are an *input* to reproducible packing,
-and Git records only the executable bit. If you want a tree to pack identically
-after a fresh clone, keep every file at `0644` or `0755`.
+Two practical notes, both about permission bits being an *input* to
+reproducible packing:
+
+- **Git records only the executable bit.** If you want a tree to pack
+  identically after a fresh clone, keep every file at `0644` or `0755`.
+- **Windows has no POSIX permission bits.** Go reports `0666` for every
+  writable file there and `0444` for a read-only one, and `os.Chmod` can only
+  toggle between those two. slidepack therefore canonicalises what it records
+  on such a filesystem: writable becomes `0644`, read-only stays `0444`. That
+  keeps output byte-identical to the same tree packed on Linux or macOS, and
+  stops a Windows-packed presentation from extracting world-writable
+  elsewhere. What it cannot do is invent an executable bit that Windows never
+  had, so a shell script packed on Windows records `0644`. Content and paths
+  round-trip exactly on every platform.
 
 ---
 

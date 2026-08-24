@@ -139,7 +139,15 @@ func LoadDiskTree(root string) (*DiskTree, error) {
 		// It is left alone deliberately: the archive stores contents, so a
 		// hard-linked file round-trips as two independent regular files, which
 		// is a faithful representation of the source bytes.
-		e := Entry{Path: pkg, Mode: fi.Mode().Perm(), Size: fi.Size(), FSPath: p}
+		//
+		// The mode is canonicalised here, at the one place a host filesystem
+		// is read, so the manifest and the archive cannot disagree about it.
+		e := Entry{
+			Path:   pkg,
+			Mode:   CanonicalMode(fi.Mode(), hostPreservesModes),
+			Size:   fi.Size(),
+			FSPath: p,
+		}
 		t.entries = append(t.entries, e)
 		t.index[pkg] = e
 		return nil

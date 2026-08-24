@@ -363,6 +363,35 @@ func TestOneChangedByteChangesTheOutput(t *testing.T) {
 	}
 }
 
+func TestChangingOnlyAModeChangesTheOutput(t *testing.T) {
+	// Modes are a genuine input to the packed bytes. That is what makes
+	// canonicalising them on a filesystem without POSIX permissions the thing
+	// that keeps output identical across operating systems: if two hosts agree
+	// on the recorded modes, and on the bytes and paths, they agree on the
+	// whole document.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows canonicalises every writable file to the same mode")
+	}
+	src := t.TempDir()
+	writeTree(t, src, kitchenSink())
+	work := t.TempDir()
+
+	one := filepath.Join(work, "one.html")
+	packTree(t, src, one)
+
+	target := filepath.Join(src, "css", "deck.css")
+	if err := os.Chmod(target, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	two := filepath.Join(work, "two.html")
+	packTree(t, src, two)
+
+	if bytes.Equal(read(t, one), read(t, two)) {
+		t.Fatal("changing a file's mode did not change the packed output")
+	}
+}
+
 func digestOf(res *pack.Result, path string) string {
 	f, _ := res.Manifest.Lookup(path)
 	return f.SHA256

@@ -142,6 +142,83 @@ jobs:
           diff -r /tmp/copy-a /tmp/restored
           echo "round trip is byte-exact"
 
+  # Reproducibility across operating systems, not just across runs.
+  #
+  # slidepack records file modes, and Windows has no POSIX permission bits --
+  # Go reports 0666 there for every writable file. Modes are canonicalised when
+  # the source tree is read so that the same presentation packs to the same
+  # bytes everywhere; this job is the evidence. .gitattributes keeps the
+  # checkout itself byte-identical, without which the comparison would be
+  # measuring line endings.
+  cross-platform-output:
+    name: pack on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Pack the fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=./slidepack
+          if [ "${{ runner.os }}" = "Windows" ]; then BIN=./slidepack.exe; fi
+          # A fixed version string so the generator field in the manifest is
+          # the same on every runner.
+          go build -trimpath -ldflags "-X main.version=reproducibility-check" -o "$BIN" ./cmd/slidepack
+          "$BIN" pack testdata/browser -o packed.html --quiet
+          "$BIN" inspect packed.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packed-${{ matrix.os }}
+          path: packed.html
+          if-no-files-found: error
+          retention-days: 3
+
+  compare-platforms:
+    name: output is identical on every platform
+    needs: cross-platform-output
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packed-*
+          path: artifacts
+
+      - name: Compare
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum */packed.html
+
+          reference=""
+          status=0
+          for dir in packed-*; do
+            if [ -z "$reference" ]; then
+              reference="$dir"
+              continue
+            fi
+            if ! cmp -s "$reference/packed.html" "$dir/packed.html"; then
+              echo "::error::$dir packed different bytes from $reference"
+              status=1
+            fi
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "Packing is meant to be reproducible across operating systems."
+            exit 1
+          fi
+          echo "every platform produced identical bytes"
+
   # The published interface description must stay valid: agents parse it.
   interface:
     name: machine-readable interface
