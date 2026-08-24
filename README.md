@@ -162,6 +162,7 @@ Works on either a source directory or a packed file.
 | `--json` | Machine-readable output on stdout. |
 | `--entry` | Entry document, for directories. |
 | `--strict` | Treat warnings as failures. |
+| `--explain` | Print the remedy for each finding — what to change, not just what is wrong. |
 
 A directory is checked for its entrypoint, path legality, filesystem object
 types, missing local resources, remote rendering dependencies, and unsupported
@@ -180,29 +181,77 @@ Diagnostic codes are stable and documented in
 ```
 quarterly-review.html
 
-  Format          slidepack v1
-  Generator       slidepack/1.0.0
-  Entrypoint      index.html
-  Files           11
-  Source content  13.8 KiB
-  Archive (tar)   22.5 KiB
-  Payload (gzip)  6.2 KiB  (45% of source)
-  Document        42.7 KiB
-  Payload SHA-256 2dcadb60…
+  format          slidepack v1
+  generator       slidepack/1.0.0
+  entrypoint      index.html
+  files           11
 
-  MODE  SIZE     MIME             PATH
-  0644  436 B    image/webp       assets/Revenue Chart – Europe.webp
-  0644  428 B    image/png        assets/chart.png
+  source content  14.2 KiB
+  archive (tar)   23.5 KiB
+  payload (gzip)  6.3 KiB   (45% of source)
+  document        43.9 KiB
+
+  payload sha256  0303c59d71974499696ae0bc6b00b336b80723b18c857e83e1470d95529c3473
+
+  MODE     SIZE  TYPE             PATH
+  0644    436 B  image/webp       assets/Revenue Chart – Europe.webp
+  0644    428 B  image/png        assets/chart.png
+  0644  3.3 KiB  font/ttf         fonts/slidepack-test.ttf
+  0644  3.1 KiB  text/html        index.html  ← entrypoint
+  0644  1.6 KiB  text/javascript  js/deck.js
   …
 ```
 
 Reads only the envelope and the manifest, so inspecting a 40 MB presentation
-costs a file read and a JSON parse. Add `--json` for machine-readable output.
+costs a file read and a JSON parse.
+
+| Option | Meaning |
+|---|---|
+| `--json` | Machine-readable output on stdout. |
+| `--files` | Print only the file paths, one per line. |
+| `--digests` | Add a full SHA-256 column to the listing. |
 
 ### `slidepack version`
 
-Also `slidepack --version`. `slidepack --help` and
-`slidepack <command> --help` explain everything above.
+Also `slidepack --version` and `slidepack -v`. Add `--json` to read it from a
+script.
+
+### `slidepack help [<command>]`
+
+The tool explains itself. `slidepack help` gives an overview; `slidepack help
+pack` gives that command's full description, its options with defaults, worked
+examples and exit codes. `--help` and `-h` work on every command and are
+equivalent. `slidepack help --all` prints the whole manual in one pass.
+
+`slidepack help --json` prints the complete interface as a machine-readable
+document — see [For presentation-generating agents](#for-presentation-generating-agents).
+
+### Global options
+
+Accepted by every command:
+
+| Option | Meaning |
+|---|---|
+| `--color <when>` | `auto` (default), `always`, or `never`. |
+| `--no-color` | The same as `--color never`. |
+| `-h`, `--help` | Show that command's help and exit. |
+
+Options may be written `--name value`, `--name=value`, `-n value` or `-n=value`,
+and may appear before or after the positional arguments — `slidepack pack ./deck
+-o deck.html` works, and so does the reverse order. Boolean short forms bundle:
+`-fq` is `--force --quiet`. A `--` ends option parsing, so a directory whose
+name begins with a dash is still packable.
+
+### Terminal output
+
+Output is coloured when it is going to a terminal and plain when it is not, so
+piping into a file or a log never captures escape sequences. The rules, in
+order: `--color never` and `--no-color` disable it; `NO_COLOR` in the
+environment disables it and beats even `--color always`; `--color always` and
+`CLICOLOR_FORCE` enable it; `TERM=dumb` disables it; otherwise it depends on
+whether the destination is a terminal.
+
+`--json` output is never coloured, whatever the setting.
 
 ### Exit codes
 
@@ -344,6 +393,41 @@ This tool exists to make generated presentations tractable to edit.
 5. Treat the resulting HTML as immutable generated output.
 ```
 
+### Learn the interface, do not scrape it
+
+```bash
+slidepack help --json
+```
+
+returns one document describing the whole program: every command, every option
+with its type, default and whether it is required, every exit code, the output
+conventions, and the **complete diagnostic catalogue** — each code with its
+severity, what it means, and a remedy saying what to change.
+
+```jsonc
+{
+  "$schema": "https://slidepack.dev/schema/cli-interface/v1",
+  "name": "slidepack",
+  "formatVersion": 1,
+  "commands": [ /* pack, unpack, validate, inspect, version, help */ ],
+  "exitCodes": [ { "code": 3, "name": "invalid", "summary": "…" } ],
+  "diagnostics": [
+    {
+      "code": "DYNAMIC_LOCAL_FETCH",
+      "severity": "error",
+      "category": "unsupported",
+      "summary": "fetch() of a literal package-local path.",
+      "remedy": "Resources exist only as blob: URLs at runtime, so a source path cannot resolve. Inline the data in a <script type=\"application/json\"> block and read it from the DOM."
+    }
+  ],
+  "conventions": { "jsonOutputStream": "stdout", "optionsAfterArguments": true }
+}
+```
+
+`slidepack help --json <command>` narrows it to one command. Nothing here needs
+help text parsing, and the catalogue is checked against the code in CI, so it
+cannot drift.
+
 Concretely:
 
 - **Do not read the base64 payload.** It is one opaque blob and reading it
@@ -353,7 +437,8 @@ Concretely:
 - **Do not edit the packed HTML.** Every hand edit is lost at the next pack,
   and altering the payload breaks its digest.
 - **Use `validate --json`** and match on the `code` field. Codes are stable and
-  documented; messages are for humans and may be reworded.
+  documented; messages are for humans and may be reworded. `--explain` adds the
+  remedy to human output; `help --json` carries the same text for every code.
 - **Bundle JavaScript to a classic script** before packing. Module graphs are
   rejected with `ES_MODULE`.
 - **Inline data instead of fetching it.** `fetch("./data.json")` cannot resolve

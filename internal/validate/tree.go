@@ -140,21 +140,21 @@ func checkRef(res *diag.Result, t source.Tree, base string, ref source.Ref) {
 			return
 		}
 		res.Errorf(diag.RemoteResource, base, ref.Line, ref.Detail,
-			"%s loads %q over the network; a packed presentation must render offline, so add the resource to the source tree and reference it by path", ref.Detail, strings.TrimSpace(ref.Raw))
+			"loads %q over the network; a packed presentation must render offline, so add the resource to the source tree and reference it by path", strings.TrimSpace(ref.Raw))
 		return
 	}
 
 	resolved, ok := pathutil.ResolveRef(base, parsed.Path)
 	if !ok {
 		res.Errorf(diag.EscapingRef, base, ref.Line, ref.Detail,
-			"%s references %q, which resolves outside the presentation directory", ref.Detail, strings.TrimSpace(ref.Raw))
+			"references %q, which resolves outside the presentation directory", strings.TrimSpace(ref.Raw))
 		return
 	}
 
 	if ref.Context == source.CtxHyperlink {
 		if mimes.IsHTML(resolved) {
 			res.Warnf(diag.LocalNavLink, base, ref.Line, ref.Detail,
-				"%s links to the package-local document %q; format v1 renders a single entrypoint, so this link will not navigate. Use a #fragment within the presentation instead.", ref.Detail, resolved)
+				"links to the package-local document %q; format v1 renders a single entrypoint, so this link will not navigate. Use a #fragment within the presentation instead.", resolved)
 		}
 		return
 	}
@@ -168,7 +168,7 @@ func checkRef(res *diag.Result, t source.Tree, base string, ref source.Ref) {
 		return
 	}
 	res.Errorf(diag.MissingResource, base, ref.Line, ref.Detail,
-		"%s references %q, which resolves to %q, but no such file exists in the source tree", ref.Detail, strings.TrimSpace(ref.Raw), resolved)
+		"references %q, which resolves to %q, but no such file exists in the source tree", strings.TrimSpace(ref.Raw), resolved)
 }
 
 func addIssues(res *diag.Result, p string, issues []source.Issue) {

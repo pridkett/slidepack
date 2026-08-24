@@ -5,8 +5,9 @@ evidence for it — a named test, or a command whose output was checked. "The
 code exists" is not evidence.
 
 Last full run of `./scripts/verify.sh`: **passed** — gofmt clean, `go vet`
-clean, all Go packages passing, CLI smoke test passing, 18 browser tests
-passing in Chromium and 18 in Firefox.
+clean, all Go packages passing, CLI smoke test passing, machine-readable
+interface check passing, 18 browser tests passing in Chromium and 18 in
+Firefox.
 
 Reproduce everything below with:
 
@@ -59,9 +60,9 @@ Reproduce everything below with:
 | AC-028 | `<base>` detection | PASS | `.../invalid/base-element` → `BASE_ELEMENT`; `cmd.TestPackReportsValidationFailuresWithExitCodeThree` |
 | AC-029 | Packed validation succeeds / corrupt fails | PASS | `cmd.TestValidatePackedFile` (exit 0); `cmd.TestValidateDetectsACorruptPayload` (non-zero) |
 | AC-030 | Source validation without packing | PASS | `cmd.TestValidateDirectory`; `verify.sh` smoke test |
-| AC-031 | JSON validation output | PASS | `cmd.TestValidateJSONIsParseableAndUnpolluted`; `cmd.TestValidateJSONEmitsArraysNotNulls`; `verify.sh` pipes it through a JSON parser |
+| AC-031 | JSON validation output | PASS | `cmd.TestValidateJSONIsParseableAndUnpolluted`; `cmd.TestValidateJSONEmitsArraysNotNulls`; `cmd.TestJSONOutputIsNeverColored`; `scripts/check-interface.py` asserts the shape in `verify.sh` and CI |
 | AC-032 | Inspection without extracting | PASS | `cmd.TestInspectHumanAndJSON`; `integration.TestInspectReportsWithoutExtracting`; `unpack.TestReadManifestDoesNotTouchThePayload` proves the payload is never decoded |
-| AC-033 | JSON inspection | PASS | `cmd.TestInspectHumanAndJSON` (unmarshals and checks fields); `verify.sh` |
+| AC-033 | JSON inspection | PASS | `cmd.TestInspectHumanAndJSON` (unmarshals and checks fields); `scripts/check-interface.py` checks every file entry and the sort order |
 | AC-034 | Existing-output protection | PASS | `pack.TestPackRefusesToOverwriteWithoutForce`; `verify.sh` smoke test expects exit 1 then 0 with `--force` |
 | AC-035 | Existing-destination protection | PASS | `cmd.TestUnpackRefusesANonEmptyDestination`; `unpack.TestExtractRefusesANonEmptyDestinationWithoutForce` |
 | AC-036 | Failed-pack atomicity | PASS | `pack.TestPackFailsValidationWithoutWritingAnything` (output directory left empty); `pack.TestPackFailsOnASymlink` |
@@ -71,9 +72,9 @@ Reproduce everything below with:
 | AC-040 | No runtime dependency | PASS | Static Go binary; runtime assets embedded with `go:embed`; only dependency is `golang.org/x/net/html`. Browser tests run the packed file with the network blocked and no extension |
 | AC-041 | Single payload | PASS | `envelope.TestPayloadIsASingleBlock`; `verify.sh` asserts exactly one `application/octet-stream` element and extracts it with system `tar`; browser test `AC-041 authored data: URLs are left untouched` |
 | AC-042 | Source-tree scale | PASS | `integration.TestLargePresentationRoundTrips` — 242 files, ~5.6 MiB of incompressible data, packed, validated, unpacked and compared |
-| AC-043 | Help and version | PASS | `cmd.TestHelpIsAvailableEverywhere` (7 invocations); `cmd.TestVersion`; `verify.sh` smoke test |
+| AC-043 | Help and version | PASS | `cmd.TestEveryCommandAcceptsHelp` (three forms per command), `cmd.TestTopLevelHelp`, `cmd.TestHelpAllCoversEveryCommand`, `cmd.TestVersion`; `verify.sh` smoke test runs 15 help/version invocations. Additionally `cmd.TestHelpJSONDescribesTheWholeInterface` and `scripts/check-interface.py` verify the machine-readable form |
 | AC-044 | Documentation | PASS | `README.md`, `docs/format-v1.md`, `docs/source-format.md` — usage, architecture, limitations, browser behaviour, security, determinism and the agent workflow. Diagnostic-code table cross-checked against `internal/diag` |
-| AC-045 | Complete verification | PASS | `./scripts/verify.sh` runs gofmt, `go vet`, `go test ./...`, a CLI smoke test, and Playwright in Chromium **and** Firefox; last run passed |
+| AC-045 | Complete verification | PASS | `./scripts/verify.sh` runs gofmt, `go vet`, `go test ./...`, a CLI smoke test, the machine-readable interface check, and Playwright in Chromium **and** Firefox; last run passed |
 
 ---
 

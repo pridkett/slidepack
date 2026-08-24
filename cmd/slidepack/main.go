@@ -7,20 +7,38 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strings"
+
+	"github.com/pwagstro/slidepack/internal/cli"
+	"github.com/pwagstro/slidepack/internal/manifest"
 )
 
-// Exit codes. These are part of the CLI contract.
+// Exit codes. These are part of the CLI contract and are published by
+// `slidepack help --json`.
 const (
 	exitOK      = 0 // success, or a valid target
 	exitError   = 1 // operational failure: I/O, corruption, refusal
 	exitUsage   = 2 // the command line itself was wrong
-	exitInvalid = 3 // the target was read successfully but is not valid
+	exitInvalid = 3 // the target was readable but is not valid
 )
+
+func exitCodes() []cli.ExitCode {
+	return []cli.ExitCode{
+		{Code: exitOK, Name: "ok", Summary: "Success, or the target is valid"},
+		{Code: exitError, Name: "error", Summary: "Operational failure: I/O, corruption, or a refused overwrite"},
+		{Code: exitUsage, Name: "usage", Summary: "The command line was wrong"},
+		{Code: exitInvalid, Name: "invalid", Summary: "The target was readable but is not valid"},
+	}
+}
+
+// pseudoVersion matches the synthetic versions the module system invents for
+// untagged commits: v0.0.0-20260824174750-fa0d4fb820c6.
+var pseudoVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]{14}-[0-9a-f]{12}`)
 
 // version is overridden at build time with
 //
@@ -34,8 +52,11 @@ func resolveVersion() string {
 		return version
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
-		if info.Main.Version != "" && info.Main.Version != "(devel)" {
-			return info.Main.Version
+		// A real tagged version is worth reporting; a pseudo-version is not.
+		// "v0.0.0-20260824174750-fa0d4fb820c6" tells a user nothing they can
+		// act on, so fall through to the shorter VCS stamp below.
+		if v := info.Main.Version; v != "" && v != "(devel)" && !pseudoVersion.MatchString(v) {
+			return v
 		}
 		var rev, modified string
 		for _, s := range info.Settings {
@@ -60,123 +81,284 @@ func resolveVersion() string {
 	return "dev"
 }
 
-func generatorString() string {
-	return "slidepack/" + resolveVersion()
-}
+func generatorString() string { return "slidepack/" + resolveVersion() }
 
-type command struct {
-	name    string
-	summary string
-	run     func(args []string) int
-}
+/* ------------------------------------------------------------------ */
+/* Global options                                                      */
+/* ------------------------------------------------------------------ */
 
-func commands() []command {
-	return []command{
-		{"pack", "Build a single self-contained HTML file from a source directory", runPack},
-		{"unpack", "Recover the source directory from a packed HTML file", runUnpack},
-		{"validate", "Check a source directory or a packed file against the format v1 contract", runValidate},
-		{"inspect", "Report on a packed file's contents without expanding it", runInspect},
-		{"version", "Print the slidepack version", runVersion},
+// globalOptions are accepted by every command. They are appended to each
+// command's own options so that the parser, the help renderer and the JSON
+// interface all see one list.
+func globalOptions() []cli.Option {
+	return []cli.Option{
+		{
+			Name: "color", Type: cli.TypeString, Placeholder: "when",
+			Default: "auto", Choices: []string{"auto", "always", "never"}, Global: true,
+			Summary: "When to colorize output",
+			Details: "auto colours only when writing to a terminal. NO_COLOR in the environment always wins.",
+		},
+		{
+			Name: "no-color", Type: cli.TypeBoolean, Global: true,
+			Summary: "Disable colour; the same as --color never",
+		},
+		{
+			Name: "help", Short: "h", Type: cli.TypeBoolean, Global: true,
+			Summary: "Show help for this command and exit",
+		},
 	}
 }
+
+// withGlobals returns a command with the global options appended.
+func withGlobals(c *cli.Command) *cli.Command {
+	c.Options = append(c.Options, globalOptions()...)
+	return c
+}
+
+/* ------------------------------------------------------------------ */
+/* Application                                                         */
+/* ------------------------------------------------------------------ */
+
+func buildApp() *cli.App {
+	app := &cli.App{
+		Name:          "slidepack",
+		Version:       resolveVersion(),
+		FormatVersion: manifest.Version,
+		Summary:       "reversible self-contained HTML presentations",
+		Tagline:       "Edit a directory. Pack it when you want one file to distribute.",
+		Description: `A presentation is an ordinary directory of HTML, CSS, JavaScript, images and fonts. slidepack compiles that directory into a single .html file that opens straight from the filesystem — no server, no browser extension, no companion folder, no network — and expands it back into the original directory whenever you want.
+
+The directory is source. The HTML file is a build artifact. Keep the directory under version control and treat the .html as generated output.`,
+		Usage: []string{
+			"<command> [options]",
+		},
+		GlobalOptions: globalOptions(),
+		ExitCodes:     exitCodes(),
+		Examples: []cli.Example{
+			{Summary: "Build one distributable file from a directory",
+				Command: "slidepack pack ./quarterly-review -o quarterly-review.html"},
+			{Summary: "Check a presentation before packing it",
+				Command: "slidepack validate ./quarterly-review"},
+			{Summary: "See what is inside a packed file, without expanding it",
+				Command: "slidepack inspect quarterly-review.html"},
+			{Summary: "Get the source directory back",
+				Command: "slidepack unpack quarterly-review.html -o ./restored"},
+		},
+		Resources: []cli.Resource{
+			{Name: "docs/source-format.md", Summary: "what a presentation directory may contain"},
+			{Name: "docs/format-v1.md", Summary: "the packed file format, in full"},
+		},
+	}
+
+	app.Commands = []*cli.Command{
+		packCommand(),
+		unpackCommand(),
+		validateCommand(),
+		inspectCommand(),
+		versionCommand(),
+		helpCommand(),
+	}
+	return app
+}
+
+/* ------------------------------------------------------------------ */
+/* Entry point                                                         */
+/* ------------------------------------------------------------------ */
 
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
+// stdout and stderr are indirected so tests can capture them.
+var (
+	stdout = os.Stdout
+	stderr = os.Stderr
+)
+
 func run(args []string) int {
+	app := buildApp()
+
+	// Colour is resolved before dispatch so that even a usage error, printed
+	// before any command runs, is styled the way the user asked for.
+	mode := preScanColor(args)
+	env := &cli.Env{
+		Out:       stdout,
+		Err:       stderr,
+		Style:     cli.NewPalette(stdout, mode),
+		ErrStyle:  cli.NewPalette(stderr, mode),
+		App:       app,
+		ColorMode: mode,
+	}
+
 	if len(args) == 0 {
-		usage(os.Stdout)
+		cli.RenderAppHelp(env.Out, env.Style, app)
 		return exitUsage
 	}
-	switch args[0] {
-	case "-h", "--help", "help":
-		if len(args) > 1 {
-			for _, c := range commands() {
-				if c.name == args[1] {
-					return c.run([]string{"--help"})
-				}
-			}
-			fmt.Fprintf(os.Stderr, "slidepack: unknown command %q\n", args[1])
-			return exitUsage
-		}
-		usage(os.Stdout)
+
+	head, rest := args[0], args[1:]
+
+	// Root-level switches that are not commands.
+	switch head {
+	case "-h", "--help":
+		return dispatch(env, mustLookup(app, "help"), rest)
+	case "-v", "-V", "--version":
+		return dispatch(env, mustLookup(app, "version"), rest)
+	}
+
+	if strings.HasPrefix(head, "-") {
+		cli.RenderUsageError(env.Err, env.ErrStyle, app, &cli.UsageError{
+			Message: fmt.Sprintf("unknown option %s", head),
+			Hint:    "options come after a command, as in: slidepack pack ./deck -o deck.html",
+		})
+		return exitUsage
+	}
+
+	cmd, ok := app.Lookup(head)
+	if !ok {
+		cli.RenderUnknownCommand(env.Err, env.ErrStyle, app, head)
+		return exitUsage
+	}
+	return dispatch(env, cmd, rest)
+}
+
+// dispatch parses a command's arguments and runs it.
+func dispatch(env *cli.Env, cmd *cli.Command, args []string) int {
+	values, err := cli.Parse(cmd, args)
+	if err != nil {
+		return reportUsage(env, err)
+	}
+
+	// --help on any command short-circuits to that command's help, which is
+	// what makes every command self-describing without a special case in each.
+	if values.Bool("help") {
+		cli.RenderCommandHelp(env.Out, env.Style, env.App, cmd)
 		return exitOK
-	case "-v", "--version":
-		return runVersion(nil)
 	}
-	if strings.HasPrefix(args[0], "-") {
-		fmt.Fprintf(os.Stderr, "slidepack: unknown option %q\n\nRun 'slidepack --help' for usage.\n", args[0])
+
+	if err := cli.CheckRequired(cmd, values); err != nil {
+		return reportUsage(env, err)
+	}
+	if err := cli.CheckArgs(cmd, values); err != nil {
+		return reportUsage(env, err)
+	}
+	return cmd.Run(env, values)
+}
+
+func reportUsage(env *cli.Env, err error) int {
+	var ue *cli.UsageError
+	if errors.As(err, &ue) {
+		cli.RenderUsageError(env.Err, env.ErrStyle, env.App, ue)
 		return exitUsage
 	}
-	for _, c := range commands() {
-		if c.name == args[0] {
-			return c.run(args[1:])
-		}
-	}
-	fmt.Fprintf(os.Stderr, "slidepack: unknown command %q\n\nRun 'slidepack --help' for usage.\n", args[0])
+	fmt.Fprintf(env.Err, "%s %v\n", env.ErrStyle.Error("slidepack:"), err)
 	return exitUsage
 }
 
-func usage(w io.Writer) {
-	fmt.Fprintf(w, `slidepack %s - reversible self-contained HTML presentations
-
-A presentation is an ordinary directory of HTML, CSS, JavaScript, images and
-fonts. slidepack compiles that directory into one .html file that opens from
-the filesystem with no server, no extension and no network, and expands it
-again on demand.
-
-  The directory is source. The HTML file is a build artifact.
-
-USAGE
-  slidepack <command> [options]
-
-COMMANDS
-`, resolveVersion())
-	for _, c := range commands() {
-		fmt.Fprintf(w, "  %-9s %s\n", c.name, c.summary)
+func mustLookup(app *cli.App, name string) *cli.Command {
+	c, ok := app.Lookup(name)
+	if !ok {
+		panic("slidepack: missing built-in command " + name)
 	}
-	fmt.Fprintf(w, `
-EXAMPLES
-  slidepack pack ./quarterly-review -o quarterly-review.html
-  slidepack validate ./quarterly-review
-  slidepack inspect quarterly-review.html
-  slidepack unpack quarterly-review.html -o ./restored
-
-Run 'slidepack <command> --help' for the options of a single command.
-Options accept one or two leading dashes, and may appear before or after the
-positional arguments.
-
-EXIT CODES
-  %d  success
-  %d  operational failure (I/O, corruption, refused overwrite)
-  %d  usage error
-  %d  the target was readable but is not valid
-
-SECURITY
-  A packed presentation is HTML and JavaScript. Opening one executes the
-  JavaScript it contains with the privileges a browser grants any local
-  document. Only open presentations from sources you trust.
-`, exitOK, exitError, exitUsage, exitInvalid)
+	return c
 }
 
-func runVersion(_ []string) int {
-	fmt.Printf("slidepack %s\n", resolveVersion())
-	fmt.Printf("format version 1\n")
-	return exitOK
+// preScanColor finds the colour setting before the real parse, so that a
+// parse *failure* is still rendered with the user's chosen colour policy.
+//
+// It is deliberately forgiving: an unrecognised value is ignored here and
+// reported properly by the real parser a moment later.
+func preScanColor(args []string) cli.ColorMode {
+	for i, a := range args {
+		switch {
+		case a == "--no-color", a == "-no-color":
+			return cli.ColorNever
+		case a == "--color", a == "-color":
+			if i+1 < len(args) {
+				if m, ok := cli.ParseColorMode(args[i+1]); ok {
+					return m
+				}
+			}
+		case strings.HasPrefix(a, "--color="), strings.HasPrefix(a, "-color="):
+			if m, ok := cli.ParseColorMode(a[strings.IndexByte(a, '=')+1:]); ok {
+				return m
+			}
+		}
+	}
+	return cli.ColorAuto
 }
+
+// applyColor re-resolves the palettes once a command's own options are known.
+// The pre-scan handles the common spellings; this covers the rest.
+func applyColor(env *cli.Env, v *cli.Values) {
+	mode := env.ColorMode
+	if v.Bool("no-color") {
+		mode = cli.ColorNever
+	} else if m, ok := cli.ParseColorMode(v.String("color")); ok && v.String("color") != "" {
+		mode = m
+	}
+	env.ColorMode = mode
+	env.Style = cli.NewPalette(env.Out, mode)
+	env.ErrStyle = cli.NewPalette(env.Err, mode)
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared helpers                                                      */
+/* ------------------------------------------------------------------ */
 
 // errorf prints a human-facing error to stderr. Machine-readable output always
-// goes to stdout, so --json consumers never see these lines.
-func errorf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "slidepack: "+format+"\n", args...)
+// goes to stdout, so a --json consumer never sees these lines.
+func errorf(env *cli.Env, format string, args ...any) {
+	fmt.Fprintf(env.Err, "%s %s\n", env.ErrStyle.Error("slidepack:"), fmt.Sprintf(format, args...))
 }
 
-// fail reports err and returns the appropriate exit code.
-func fail(err error) int {
+// fail reports err and returns the operational exit code.
+func fail(env *cli.Env, err error) int {
 	if err == nil {
 		return exitOK
 	}
-	errorf("%v", err)
+	errorf(env, "%v", err)
 	return exitError
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func versionCommand() *cli.Command {
+	return withGlobals(&cli.Command{
+		Name:    "version",
+		Summary: "Print the slidepack version and the format version it writes",
+		Description: `Prints the version of this executable and the packed format version it reads and writes.
+
+The format version matters more than the tool version: a file packed by any build that writes format 1 can be read by any build that reads format 1.`,
+		Usage: []string{"", "--json"},
+		Options: []cli.Option{
+			{Name: "json", Type: cli.TypeBoolean, Summary: "Emit machine-readable JSON on stdout"},
+		},
+		Examples: []cli.Example{
+			{Summary: "Print the version", Command: "slidepack version"},
+			{Summary: "Read the version from a script", Command: "slidepack version --json"},
+		},
+		SeeAlso: []string{"help"},
+		Run: func(env *cli.Env, v *cli.Values) int {
+			applyColor(env, v)
+			if v.Bool("json") {
+				if err := cli.WriteJSON(env.Out, map[string]any{
+					"name":          "slidepack",
+					"version":       resolveVersion(),
+					"formatVersion": manifest.Version,
+				}); err != nil {
+					return fail(env, err)
+				}
+				return exitOK
+			}
+			p := env.Style
+			fmt.Fprintf(env.Out, "%s %s\n", p.Title("slidepack"), p.Value(resolveVersion()))
+			fmt.Fprintf(env.Out, "%s %s\n", p.Muted("packed format version"), p.Value(fmt.Sprint(manifest.Version)))
+			return exitOK
+		},
+	})
 }

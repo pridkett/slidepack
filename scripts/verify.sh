@@ -120,7 +120,19 @@ run_expect() {
 
 run_expect 0 "$BIN" version
 run_expect 0 "$BIN" --version
+run_expect 0 "$BIN" -v
 run_expect 0 "$BIN" --help
+run_expect 0 "$BIN" -h
+run_expect 0 "$BIN" help
+run_expect 0 "$BIN" help pack
+run_expect 0 "$BIN" help --json
+run_expect 0 "$BIN" help --all
+run_expect 2 "$BIN" help nosuchcommand
+run_expect 2 "$BIN" nosuchcommand
+run_expect 0 "$BIN" pack --help
+run_expect 0 "$BIN" unpack --help
+run_expect 0 "$BIN" validate --help
+run_expect 0 "$BIN" inspect --help
 run_expect 0 "$BIN" validate testdata/basic
 run_expect 3 "$BIN" validate testdata/invalid/missing-resource
 run_expect 0 "$BIN" pack testdata/basic -o "$SMOKE/basic.html"
@@ -155,13 +167,21 @@ if ! cmp -s "$SMOKE/one.html" "$SMOKE/two.html"; then
   smoke_ok=0
 fi
 
-# Machine-readable output is parseable and unpolluted (AC-031, AC-033).
-if ! "$BIN" validate --json testdata/basic | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
-  echo "  FAIL: validate --json did not emit parseable JSON" >&2
+# Colour must never leak into a pipe, and must never appear in JSON.
+if "$BIN" validate testdata/basic | grep -q $'\033'; then
+  echo "  FAIL: colour escapes appeared in piped output" >&2
   smoke_ok=0
 fi
-if ! "$BIN" inspect --json "$SMOKE/basic.html" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
-  echo "  FAIL: inspect --json did not emit parseable JSON" >&2
+if "$BIN" validate --json testdata/basic --color always | grep -q $'\033'; then
+  echo "  FAIL: colour escapes appeared in --json output" >&2
+  smoke_ok=0
+fi
+if ! "$BIN" validate testdata/basic --color always | grep -q $'\033'; then
+  echo "  FAIL: --color always produced no colour" >&2
+  smoke_ok=0
+fi
+if NO_COLOR=1 "$BIN" validate testdata/basic --color always | grep -q $'\033'; then
+  echo "  FAIL: NO_COLOR did not override --color always" >&2
   smoke_ok=0
 fi
 
@@ -187,6 +207,16 @@ else
   FAILURES+=("cli smoke test")
 fi
 rm -rf "$SMOKE"
+
+# ---------------------------------------------------------------------------
+step "machine-readable interface"
+# ---------------------------------------------------------------------------
+# help/validate/inspect --json are a contract that agents depend on. Checking
+# the shape here means a refactor that drops a field fails a build rather than
+# somebody's automation.
+if ! python3 ./scripts/check-interface.py "$BIN"; then
+  FAILURES+=("interface check")
+fi
 
 # ---------------------------------------------------------------------------
 if [[ "$BROWSER_TESTS" == "1" ]]; then

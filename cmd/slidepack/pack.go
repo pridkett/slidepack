@@ -2,106 +2,130 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"os"
 
+	"github.com/pwagstro/slidepack/internal/cli"
 	"github.com/pwagstro/slidepack/internal/inspect"
 	"github.com/pwagstro/slidepack/internal/pack"
 	"github.com/pwagstro/slidepack/internal/source"
 )
 
-func runPack(args []string) int {
-	fs := flag.NewFlagSet("pack", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	var (
-		output string
-		entry  string
-		force  bool
-		quiet  bool
-	)
-	fs.StringVar(&output, "o", "", "path of the HTML file to write (required)")
-	fs.StringVar(&output, "output", "", "path of the HTML file to write (required)")
-	fs.StringVar(&entry, "entry", source.DefaultEntrypoint, "package path of the entry document")
-	fs.BoolVar(&force, "force", false, "replace the output file if it already exists")
-	fs.BoolVar(&quiet, "quiet", false, "print nothing on success")
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `slidepack pack - build a single self-contained HTML file
+func packCommand() *cli.Command {
+	return withGlobals(&cli.Command{
+		Name:    "pack",
+		Summary: "Build a single self-contained HTML file from a source directory",
+		Description: `Validates the source directory, then compiles it into one .html file containing every asset.
 
-USAGE
-  slidepack pack <directory> -o <presentation.html> [options]
+The result opens directly from the filesystem in current Firefox and Chromium: no server, no browser extension, no companion directory and no network. JavaScript must be enabled.
 
-The source directory is validated first. Packing fails, without writing
-anything, if the entrypoint is missing, a referenced local file does not
-exist, a rendering resource is loaded over the network, or the source uses a
-construct format v1 cannot serve (ES modules, <base>, service workers,
-local iframes, import maps).
+Nothing is written if validation fails. A pack that succeeds is a presentation that renders.`,
+		Usage: []string{
+			"<directory> --output <file.html> [options]",
+		},
+		Arguments: []cli.Argument{
+			{Name: "directory", Summary: "The presentation source directory.", Required: true},
+		},
+		Options: []cli.Option{
+			{
+				Name: "output", Short: "o", Type: cli.TypeString, Placeholder: "file.html",
+				Required: true,
+				Summary:  "Path of the HTML file to write",
+				Details:  "Parent directories are created as needed. The path may not be inside the directory being packed.",
+			},
+			{
+				Name: "entry", Type: cli.TypeString, Placeholder: "path",
+				Default: source.DefaultEntrypoint,
+				Summary: "Package path of the entry document",
+				Details: "Must be a .html or .htm file inside the source directory.",
+			},
+			{
+				Name: "force", Type: cli.TypeBoolean,
+				Summary: "Replace the output file if it already exists",
+			},
+			{
+				Name: "quiet", Short: "q", Type: cli.TypeBoolean,
+				Summary: "Print nothing on success",
+			},
+		},
+		Notes: []cli.Note{
+			{
+				Title: "What makes packing fail",
+				Body: `Packing refuses, without writing anything, when:
 
-Output is deterministic: the same source bytes, paths, modes and entrypoint
-produce a byte-identical file. Filesystem timestamps are not recorded.
+  the entry document does not exist
+  a statically referenced local file is missing
+  a rendering resource is loaded over http or https
+  the tree contains a symlink, device, FIFO or socket
+  a path cannot be represented in a USTAR header
+  the source uses a construct format v1 cannot serve
 
-These names are never packed: %s
+Run validate for the same checks without producing a file. Every finding carries a stable diagnostic code; see slidepack help --json.`,
+			},
+			{
+				Title: "Reproducible output",
+				Body: `Given the same source paths, bytes, permission bits and entrypoint, and the same slidepack version, packing produces a byte-identical file. Filesystem modification times have no effect.
 
-OPTIONS
-`, source.DescribeExclusions())
-		fs.PrintDefaults()
-		fmt.Fprintf(os.Stderr, `
-EXAMPLES
-  slidepack pack ./deck -o deck.html
-  slidepack pack ./deck -o deck.html --entry slides.html --force
-`)
-	}
-	if err := fs.Parse(permute(fs, args)); err != nil {
-		return exitUsage
-	}
-	rest := fs.Args()
-	if len(rest) == 0 {
-		errorf("pack needs a source directory\n\nUsage: slidepack pack <directory> -o <presentation.html>")
-		return exitUsage
-	}
-	if len(rest) > 1 {
-		errorf("pack takes exactly one source directory (got %d)", len(rest))
-		return exitUsage
-	}
-	if output == "" {
-		errorf("pack needs an output path\n\nUsage: slidepack pack <directory> -o <presentation.html>")
-		return exitUsage
-	}
+Two caveats: permission bits are an input, and Git records only the executable bit, so prefer 0644 and 0755 if you want identical output after a fresh clone. The generator string is recorded in the manifest, so output changes across slidepack versions by design.`,
+			},
+			{
+				Title: "Files that are never packed",
+				Body:  "These names are skipped so that output cannot depend on which machine last opened the directory: " + source.DescribeExclusions() + ". Empty directories are not preserved.",
+			},
+		},
+		Examples: []cli.Example{
+			{Summary: "Build a deck for distribution",
+				Command: "slidepack pack ./quarterly-review -o quarterly-review.html"},
+			{Summary: "Use a different entry document",
+				Command: "slidepack pack ./deck -o deck.html --entry slides.html"},
+			{Summary: "Rebuild over an existing file, silently",
+				Command: "slidepack pack ./deck -o dist/deck.html --force --quiet"},
+		},
+		SeeAlso: []string{"validate", "unpack", "inspect"},
+		Run:     runPack,
+	})
+}
+
+func runPack(env *cli.Env, v *cli.Values) int {
+	applyColor(env, v)
+	p := env.Style
+	sourceDir := v.Args()[0]
+	output := v.String("output")
 
 	res, err := pack.Run(pack.Options{
-		SourceDir:  rest[0],
+		SourceDir:  sourceDir,
 		Output:     output,
-		Entrypoint: entry,
-		Force:      force,
+		Entrypoint: v.String("entry"),
+		Force:      v.Bool("force"),
 		Generator:  generatorString(),
 	})
 	if err != nil {
 		var ve *pack.ValidationError
 		if errors.As(err, &ve) {
-			errorf("%s is not a valid presentation source; nothing was written", rest[0])
-			fmt.Fprintln(os.Stderr)
-			printDiagnostics(os.Stderr, ve.Result)
+			errorf(env, "%s is not a valid presentation source; nothing was written",
+				env.ErrStyle.Path(sourceDir))
+			fmt.Fprintln(env.Err)
+			renderDiagnostics(env.Err, env.ErrStyle, ve.Result)
 			return exitInvalid
 		}
-		return fail(err)
+		return fail(env, err)
 	}
 
-	if !quiet {
-		fmt.Printf("Packed %d file%s (%s of source) into %s (%s)\n",
-			len(res.Manifest.Files), plural(len(res.Manifest.Files)),
-			inspect.HumanBytes(res.Manifest.TotalSize()),
-			output, inspect.HumanBytes(res.OutputSize))
-		if len(res.Validation.Warnings) > 0 {
-			fmt.Fprintln(os.Stderr)
-			printDiagnostics(os.Stderr, res.Validation)
-		}
+	if v.Bool("quiet") {
+		return exitOK
+	}
+
+	n := len(res.Manifest.Files)
+	fmt.Fprintf(env.Out, "%s Packed %s file%s %s into %s %s\n",
+		p.MarkOK(),
+		p.Value(fmt.Sprint(n)), plural(n),
+		p.Muted("("+inspect.HumanBytes(res.Manifest.TotalSize())+" of source)"),
+		p.Path(output),
+		p.Muted("("+inspect.HumanBytes(res.OutputSize)+")"),
+	)
+
+	if len(res.Validation.Warnings) > 0 {
+		fmt.Fprintln(env.Err)
+		renderDiagnostics(env.Err, env.ErrStyle, res.Validation)
 	}
 	return exitOK
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
 }

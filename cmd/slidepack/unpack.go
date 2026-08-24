@@ -2,86 +2,113 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
-	"os"
 
+	"github.com/pwagstro/slidepack/internal/cli"
 	"github.com/pwagstro/slidepack/internal/inspect"
 	"github.com/pwagstro/slidepack/internal/unpack"
 )
 
-func runUnpack(args []string) int {
-	fs := flag.NewFlagSet("unpack", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	var (
-		output string
-		force  bool
-		quiet  bool
-	)
-	fs.StringVar(&output, "o", "", "directory to write the source tree into (required)")
-	fs.StringVar(&output, "output", "", "directory to write the source tree into (required)")
-	fs.BoolVar(&force, "force", false, "write into the destination even if it already contains files")
-	fs.BoolVar(&quiet, "quiet", false, "print nothing on success")
-	fs.Usage = func() {
-		fmt.Fprint(os.Stderr, `slidepack unpack - recover the source directory from a packed file
+func unpackCommand() *cli.Command {
+	return withGlobals(&cli.Command{
+		Name:    "unpack",
+		Summary: "Recover the source directory from a packed HTML file",
+		Description: `Expands a packed presentation back into the ordinary directory it was built from.
 
-USAGE
-  slidepack unpack <presentation.html> -o <directory> [options]
+Every regular file, its relative path, its exact bytes and its Unix permission bits are restored. Modification times, ownership and empty directories are deliberately not restored: they are not part of the canonical source representation.
 
-The payload digest and every per-file digest are verified before anything is
-written. Archive paths are treated as untrusted: absolute paths, "..", drive
-letters and NUL bytes are rejected, and slidepack refuses to write through a
-symbolic link. When the destination does not exist, files are built in a
-staging directory and moved into place, so a failure leaves nothing behind.
+This is the intended way to edit a presentation you only have as a packed file. Unpack it, change the source, pack it again.`,
+		Usage: []string{
+			"<file.html> --output <directory> [options]",
+		},
+		Arguments: []cli.Argument{
+			{Name: "file.html", Summary: "The packed presentation to expand.", Required: true},
+		},
+		Options: []cli.Option{
+			{
+				Name: "output", Short: "o", Type: cli.TypeString, Placeholder: "directory",
+				Required: true,
+				Summary:  "Directory to write the source tree into",
+				Details:  "Created if it does not exist. Parent directories are created as needed.",
+			},
+			{
+				Name: "force", Type: cli.TypeBoolean,
+				Summary: "Write into the destination even if it already contains files",
+				Details: "Existing files with the same names are overwritten in place; unrelated files are left alone.",
+			},
+			{
+				Name: "quiet", Short: "q", Type: cli.TypeBoolean,
+				Summary: "Print nothing on success",
+			},
+		},
+		Notes: []cli.Note{
+			{
+				Title: "Verification",
+				Body: `The payload digest and every per-file digest are checked before a single byte is written. A truncated or altered file is reported rather than partially extracted.
 
-Source timestamps and ownership are deliberately not restored; they are not
-part of the canonical source representation. Permission bits are.
+These digests detect corruption. They are not signatures and say nothing about who produced the file.`,
+			},
+			{
+				Title: "Safety",
+				Body: `Archive paths are treated as untrusted throughout. Absolute paths, "..", Windows drive letters, backslashes, NUL bytes and control characters are all rejected, resolved destinations are re-checked for containment, and slidepack refuses to write through a symbolic link.
 
-OPTIONS
-`)
-		fs.PrintDefaults()
-		fmt.Fprint(os.Stderr, `
-EXAMPLES
-  slidepack unpack deck.html -o ./deck
-  slidepack unpack deck.html -o ./deck --force
-`)
-	}
-	if err := fs.Parse(permute(fs, args)); err != nil {
-		return exitUsage
-	}
-	rest := fs.Args()
-	if len(rest) == 0 {
-		errorf("unpack needs a packed HTML file\n\nUsage: slidepack unpack <presentation.html> -o <directory>")
-		return exitUsage
-	}
-	if len(rest) > 1 {
-		errorf("unpack takes exactly one packed file (got %d)", len(rest))
-		return exitUsage
-	}
-	if output == "" {
-		errorf("unpack needs an output directory\n\nUsage: slidepack unpack <presentation.html> -o <directory>")
-		return exitUsage
-	}
+When the destination does not exist, files are built in a staging directory and moved into place, so a failure leaves nothing behind. Extracting into an existing directory with --force does not have that protection; do not use it on a directory untrusted local processes can write to.`,
+			},
+		},
+		Examples: []cli.Example{
+			{Summary: "Recover the source of a deck you were sent",
+				Command: "slidepack unpack quarterly-review.html -o ./quarterly-review"},
+			{Summary: "Re-extract over a previous checkout",
+				Command: "slidepack unpack deck.html -o ./deck --force"},
+			{Summary: "Round-trip a deck to confirm it is intact",
+				Command: "slidepack unpack deck.html -o /tmp/check && diff -r ./deck /tmp/check"},
+		},
+		SeeAlso: []string{"pack", "inspect", "validate"},
+		Run:     runUnpack,
+	})
+}
 
-	pkg, err := unpack.OpenFile(rest[0], unpack.Options{})
+func runUnpack(env *cli.Env, v *cli.Values) int {
+	applyColor(env, v)
+	p := env.Style
+	input := v.Args()[0]
+	output := v.String("output")
+
+	pkg, err := unpack.OpenFile(input, unpack.Options{})
 	if err != nil {
 		var ue *unpack.Error
 		if errors.As(err, &ue) {
-			errorf("%s: %s [%s]", rest[0], ue.Error(), ue.Code)
+			reportPackageError(env, input, ue)
 			return exitInvalid
 		}
-		return fail(err)
+		return fail(env, err)
 	}
 
-	res, err := unpack.Extract(pkg, output, unpack.ExtractOptions{Force: force})
+	res, err := unpack.Extract(pkg, output, unpack.ExtractOptions{Force: v.Bool("force")})
 	if err != nil {
-		return fail(err)
+		return fail(env, err)
 	}
 
-	if !quiet {
-		fmt.Printf("Restored %d file%s (%s) to %s\n",
-			res.FileCount, plural(res.FileCount), inspect.HumanBytes(res.TotalBytes), output)
-		fmt.Printf("Entrypoint: %s\n", pkg.Manifest.Entrypoint)
+	if v.Bool("quiet") {
+		return exitOK
 	}
+	fmt.Fprintf(env.Out, "%s Restored %s file%s %s to %s\n",
+		p.MarkOK(),
+		p.Value(fmt.Sprint(res.FileCount)), plural(res.FileCount),
+		p.Muted("("+inspect.HumanBytes(res.TotalBytes)+")"),
+		p.Path(output),
+	)
+	fmt.Fprintf(env.Out, "  %s %s\n", p.Muted("entrypoint"), p.Path(pkg.Manifest.Entrypoint))
 	return exitOK
+}
+
+// reportPackageError renders a failure to read a packed file, including the
+// stable code and, where one exists, the catalogued remedy.
+func reportPackageError(env *cli.Env, target string, ue *unpack.Error) {
+	p := env.ErrStyle
+	fmt.Fprintf(env.Err, "%s %s\n", p.Error("slidepack:"), p.Path(target))
+	fmt.Fprintf(env.Err, "  %s %s\n", p.Error(string(ue.Code)), ue.Error())
+	if info, ok := describeCode(ue.Code); ok && info.Remedy != "" {
+		fmt.Fprintf(env.Err, "  %s %s\n", p.Muted("remedy:"), p.Muted(info.Remedy))
+	}
 }

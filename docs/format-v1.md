@@ -568,6 +568,11 @@ These codes are a stable public contract. Adding a code is a compatible
 change; changing what an existing one means is not. They appear in
 `slidepack validate --json` under `errors[].code` and `warnings[].code`.
 
+The same catalogue, with a machine-readable severity, category and remedy for
+each code, is published by `slidepack help --json` under `diagnostics`. That is
+the form to consume programmatically; this table is for reading. A test asserts
+that every declared code appears in the catalogue, so the two cannot diverge.
+
 ### Source structure
 
 | Code | Meaning |
