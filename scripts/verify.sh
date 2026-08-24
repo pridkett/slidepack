@@ -13,17 +13,20 @@
 # Usage:
 #   ./scripts/verify.sh              # everything
 #   ./scripts/verify.sh --no-browser # skip the browser suites
+#   ./scripts/verify.sh --no-site    # skip the documentation site build
 #   ./scripts/verify.sh --short      # skip the multi-megabyte scale test
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 BROWSER_TESTS=1
+SITE_BUILD=1
 GO_TEST_FLAGS=()
 
 for arg in "$@"; do
   case "$arg" in
     --no-browser) BROWSER_TESTS=0 ;;
+    --no-site)    SITE_BUILD=0 ;;
     --short)      GO_TEST_FLAGS+=("-short") ;;
     -h|--help)
       sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -216,6 +219,21 @@ step "machine-readable interface"
 # somebody's automation.
 if ! python3 ./scripts/check-interface.py "$BIN"; then
   FAILURES+=("interface check")
+fi
+
+# ---------------------------------------------------------------------------
+if [[ "$SITE_BUILD" == "1" ]]; then
+  step "documentation site"
+  # The site renders docs/*.md directly and checks every internal link, so a
+  # broken cross-reference fails here rather than on the published site.
+  if (cd site && go run . -bin "$BIN" -out dist >/dev/null); then
+    note "built, no broken internal links"
+  else
+    FAILURES+=("documentation site")
+  fi
+else
+  step "documentation site"
+  note "SKIPPED (--no-site)"
 fi
 
 # ---------------------------------------------------------------------------

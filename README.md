@@ -12,6 +12,11 @@ whenever you want.
 The directory is source. The HTML file is a build artifact.
 ```
 
+**[Documentation](https://pridkett.github.io/slidepack)** ·
+[Source format](https://pridkett.github.io/slidepack/source-format.html) ·
+[Packed format](https://pridkett.github.io/slidepack/format-v1.html) ·
+[For agents](https://pridkett.github.io/slidepack/agents.html)
+
 That separation is the whole point. Self-contained HTML is a fine way to hand
 someone a deck and a miserable way to author one: assets are inaccessible,
 diffs are useless, replacing an image means surgery on a megabyte of base64,
@@ -428,6 +433,15 @@ severity, what it means, and a remedy saying what to change.
 help text parsing, and the catalogue is checked against the code in CI, so it
 cannot drift.
 
+The same documents are published, so you can read them without running
+anything:
+
+| URL | Contents |
+|---|---|
+| [`/llms.txt`](https://pridkett.github.io/slidepack/llms.txt) | An index of this project, in the [llms.txt](https://llmstxt.org) convention. |
+| [`/llms-full.txt`](https://pridkett.github.io/slidepack/llms-full.txt) | Every documentation page concatenated as Markdown. |
+| [`/cli.json`](https://pridkett.github.io/slidepack/cli.json) | The complete CLI interface, identical to `slidepack help --json`. |
+
 Concretely:
 
 - **Do not read the base64 payload.** It is one opaque blob and reading it
@@ -476,13 +490,18 @@ out while authoring rather than after distributing.
 ```bash
 ./scripts/verify.sh              # everything, including both browsers
 ./scripts/verify.sh --no-browser # Go only
+./scripts/verify.sh --no-site    # skip the documentation site build
 ./scripts/verify.sh --short      # skip the multi-megabyte scale test
+
+./scripts/build-site.sh --serve  # preview the documentation site locally
 ```
 
 The verification gate runs `gofmt`, `go vet`, the full Go test suite, a
-command-line smoke test against the built binary, and the Playwright suite in
-Chromium **and** Firefox. The browser tests are not optional: a packed file is
-only correct if two real engines agree that it renders.
+command-line smoke test against the built binary, a check that the
+machine-readable interface still carries the fields agents parse, the
+documentation site build, and the Playwright suite in Chromium **and** Firefox.
+The browser tests are not optional: a packed file is only correct if two real
+engines agree that it renders.
 
 ```
 cmd/slidepack/        CLI
@@ -499,9 +518,18 @@ internal/source/      HTML, CSS and JS scanners; source trees
 internal/unpack/      decode, verify, extract safely
 internal/validate/    the format v1 source contract
 docs/                 format and authoring specifications
+site/                 the documentation site and its generator
 testdata/             valid and invalid fixtures
 tests/browser/        Playwright suites
 ```
+
+The site is a handful of static pages with one stylesheet, no JavaScript and no
+web fonts — it makes no network request of its own, which is the same promise a
+packed presentation makes. Its generator is a separate Go module so that
+slidepack itself stays at exactly one dependency. The two specification pages
+are rendered from the very `docs/*.md` files above, and `cli.json` comes from
+running the binary, so the site cannot document a format or a flag that does not
+exist. Every internal link is checked at build time.
 
 The only third-party Go dependency is `golang.org/x/net/html`, used to
 tokenize HTML. That is a correctness argument rather than a convenience one:

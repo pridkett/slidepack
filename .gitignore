@@ -5,6 +5,9 @@
 # Packed presentations produced while testing by hand
 /*.html
 
+# Generated documentation site
+site/dist/
+
 # Browser test artifacts
 tests/browser/node_modules/
 tests/browser/.artifacts/

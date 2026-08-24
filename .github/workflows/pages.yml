@@ -1,0 +1,79 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  # Pull requests build the site but do not publish it, so a broken link or a
+  # malformed document fails in review rather than on the live site.
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            site/go.sum
+
+      # The site renders the specification documents straight out of docs/ and
+      # generates cli.json by running the binary, so it cannot describe a format
+      # or a flag that does not exist. That also means the build needs the
+      # binary, which build-site.sh takes care of.
+      - name: Build
+        run: ./scripts/build-site.sh
+
+      - name: Publishes what it should
+        run: |
+          set -euo pipefail
+          cd site/dist
+          for f in index.html source-format.html format-v1.html agents.html \
+                   style.css llms.txt llms-full.txt cli.json .nojekyll; do
+            if [ ! -f "$f" ]; then
+              echo "::error::the site is missing $f"
+              exit 1
+            fi
+          done
+          python3 -c 'import json; json.load(open("cli.json"))'
+          echo "site/dist contains $(find . -type f | wc -l | tr -d ' ') files"
+
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: site/dist
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

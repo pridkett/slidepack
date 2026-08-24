@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<meta name="description" content="{{.Description}}">
+<link rel="stylesheet" href="style.css">
+<link rel="canonical" href="{{.BaseURL}}/{{.Out}}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%23f6f4ef%22%2F%3E%3Cpath%20d%3D%22M2%2011L11%202h3v3L5%2014H2z%22%20fill%3D%22%23a8431c%22%2F%3E%3C%2Fsvg%3E">
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:description" content="{{.Description}}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{.BaseURL}}/{{.Out}}">
+<!--
+  There is one stylesheet and no JavaScript here, and the fonts are ones you
+  already have. This page makes no network request of its own — the same
+  promise slidepack makes for a packed presentation.
+
+  Machine-readable companions:
+    {{.BaseURL}}/llms.txt        an index for language models
+    {{.BaseURL}}/llms-full.txt   every page, concatenated as plain text
+    {{.BaseURL}}/cli.json        the complete CLI interface description
+-->
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="index.html">slidepack</a>
+    <nav>
+      {{- range .Nav}}
+      <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a>
+      {{- end}}
+      <a href="https://github.com/pridkett/slidepack">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main{{if .NumberedByHand}} class="numbered-by-hand"{{end}}>
+{{.Content}}
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>slidepack &middot; packed format version {{.FormatVersion}}</span>
+    <span class="spacer"><a href="llms.txt">llms.txt</a></span>
+    <span><a href="cli.json">cli.json</a></span>
+    <span><a href="https://github.com/pridkett/slidepack">github</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
