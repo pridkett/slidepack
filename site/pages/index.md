@@ -35,6 +35,12 @@ Unix permission bit. Nothing is one-way.
 ## Install
 
 ```bash
+brew install pridkett/tap/slidepack
+```
+
+Or with Go:
+
+```bash
 go install github.com/pridkett/slidepack/cmd/slidepack@latest
 ```
 

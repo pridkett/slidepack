@@ -44,10 +44,24 @@ the `.html` as generated output, and both problems go away.
 ## Install
 
 ```bash
+brew install pridkett/tap/slidepack
+```
+
+Or grab a binary for your platform from the
+[releases page](https://github.com/pridkett/slidepack/releases), or install
+with Go:
+
+```bash
+go install github.com/pridkett/slidepack/cmd/slidepack@latest
+```
+
+Or build from a checkout:
+
+```bash
 go build -o slidepack ./cmd/slidepack
 ```
 
-Or with a version stamped in:
+With a version stamped in:
 
 ```bash
 go build -ldflags "-X main.version=1.0.0" -o slidepack ./cmd/slidepack
